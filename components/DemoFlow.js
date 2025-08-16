@@ -464,7 +464,7 @@ const renderQuickReplies = () => {
         <div className="mt-4">
           <input
             type="text"
-            placeholder="Type your cultural context..."
+            placeholder="e.g. Yoruba market life"
             value={contextInput}
             onChange={(e) => setContextInput(e.target.value)}
             onKeyDown={async (e) => {
