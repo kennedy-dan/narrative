@@ -1,6 +1,5 @@
 "use client";
 import React, { useState, useRef, useEffect } from "react";
-// Note: axios import removed for demo - replace with your actual HTTP client
 import {
   Send,
   Bot,
@@ -10,9 +9,9 @@ import {
   Video,
   X,
   Check,
+  Download,
+  Copy
 } from "lucide-react";
-import { Download, Copy } from "lucide-react";
-// import Image from "next/image";
 
 const maslowLevels = [
   "Essentials for Living",
@@ -56,6 +55,26 @@ const enhancementOptions = [
     description: "Compelling composition and visual hierarchy",
   },
 ];
+
+function prepareBrandSafePrompt(prompt, brandSafeMode = true) {
+  if (!brandSafeMode) return prompt;
+  
+  const replacements = {
+    "Pepsi": "a fizzy cola in a blue-labeled glass bottle",
+    "Coca-Cola": "a glass soda bottle with a red label",
+    "Nivea": "a round skincare cream jar with a deep blue lid",
+    "Swan Spring Water": "a clear plastic bottle of refreshing natural spring water",
+    "Gala": "a golden brown sausage roll in a red street-style wrapper"
+  };
+  
+  let cleanPrompt = prompt;
+  Object.entries(replacements).forEach(([brand, generic]) => {
+    const regex = new RegExp(brand, "gi");
+    cleanPrompt = cleanPrompt.replace(regex, generic);
+  });
+  
+  return cleanPrompt;
+}
 
 const ChatMessage = ({ sender, message, timestamp, isTyping, children }) => {
   const isBot = sender === "bot";
@@ -103,7 +122,6 @@ const ChatMessage = ({ sender, message, timestamp, isTyping, children }) => {
             </>
           )}
         </div>
-        {/* <p className="text-xs text-gray-500 mt-1 px-2">{timestamp}</p> */}
       </div>
 
       {!isBot && (
@@ -156,11 +174,12 @@ export default function ChatStoryFlow() {
   const [visualOutput, setVisualOutput] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
   const [tone, setTone] = useState("");
-const [toneInput, setToneInput] = useState("");
-  const [copied, setCopied] = React.useState(false); // Add state for copy feedback
-const [brand, setBrand] = useState("");
-const [contextInput, setContextInput] = useState("");
-const [brandInput, setBrandInput] = useState("");
+  const [toneInput, setToneInput] = useState("");
+  const [copied, setCopied] = useState(false);
+  const [brand, setBrand] = useState("");
+  const [contextInput, setContextInput] = useState("");
+  const [brandInput, setBrandInput] = useState("");
+  const [brandSafeMode, setBrandSafeMode] = useState(true);
   const messagesEndRef = useRef(null);
 
   const scrollToBottom = () => {
@@ -227,7 +246,6 @@ const [brandInput, setBrandInput] = useState("");
 
     setIsGenerating(true);
     try {
-      // Replace with your actual API call
       const response = await fetch("/api/story", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -310,11 +328,14 @@ const [brandInput, setBrandInput] = useState("");
 
     setIsGenerating(true);
     try {
+      // Apply brand-safe filtering to the visual cue before sending
+      const safePrompt = prepareBrandSafePrompt(visualCue, brandSafeMode);
+      
       const response = await fetch("/api/visual", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          visualCue,
+          visualCue: safePrompt,
           enhancements: selectedEnhancements,
           type: wantsVisual,
         }),
@@ -330,8 +351,7 @@ const [brandInput, setBrandInput] = useState("");
       );
 
       if (wantsVisual === "image" && res.imageUrl) {
-        // Show image in chat
-         let copyTimeout;
+        let copyTimeout;
         setTimeout(() => {
           addMessage(
             "bot",
@@ -344,7 +364,6 @@ const [brandInput, setBrandInput] = useState("");
               />
               <p className="text-xs text-gray-500 mt-2">Prompt: {res.output}</p>
               <div className="flex gap-3 mt-2">
-                {/* Download Button */}
                 <button
                   onClick={() => {
                     const link = document.createElement("a");
@@ -357,7 +376,6 @@ const [brandInput, setBrandInput] = useState("");
                   <Download size={18} />
                 </button>
 
-                {/* Copy Prompt Button */}
                 <button
                   onClick={() => {
                     navigator.clipboard.writeText(res.output);
@@ -377,7 +395,6 @@ const [brandInput, setBrandInput] = useState("");
           );
         }, 500);
       } else {
-        // Show text/script
         setTimeout(() => {
           addMessage(
             "bot",
@@ -390,7 +407,7 @@ const [brandInput, setBrandInput] = useState("");
       }
 
       setTimeout(() => {
-        addMessage("bot", "✨ Want to create another story?");
+        addMessage("bot", "Want to create another story?");
         setCurrentStep("complete");
       }, 1000);
     } catch (error) {
@@ -427,6 +444,7 @@ const [brandInput, setBrandInput] = useState("");
     setSelectedEnhancements([]);
     setVisualOutput("");
   };
+
 const renderQuickReplies = () => {
   switch (currentStep) {
     case "maslow":
@@ -539,7 +557,7 @@ const renderQuickReplies = () => {
             onClick={() => handleContextSelect(context)}
             variant="primary"
           >
-            🚀 Generate Story
+            Generate Story
           </QuickReplyButton>
         </div>
       );
@@ -615,7 +633,7 @@ const renderQuickReplies = () => {
       return (
         <div className="flex gap-2 mt-4">
           <QuickReplyButton onClick={resetChat} variant="primary">
-            ✨ Create New Story
+            Create New Story
           </QuickReplyButton>
         </div>
       );
@@ -625,17 +643,29 @@ const renderQuickReplies = () => {
   }
 };
 
-
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
       {/* Header */}
       <div className="bg-white border-b border-gray-200 px-4 py-3 shadow-sm">
-        <div className="flex items-center gap-3">
-          <img src="/images/logo.png" />
-          <div>
-            <h1 className="text-lg font-bold text-gray-800">Narratives.XO</h1>
-            <p className="text-xs text-gray-500">AI Story Generator</p>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <img src="/images/logo.png" />
+            <div>
+              <h1 className="text-lg font-bold text-gray-800">Narratives.XO</h1>
+              <p className="text-xs text-gray-500">AI Story Generator</p>
+            </div>
           </div>
+          
+          {/* Brand-Safe Mode Toggle */}
+          <label className="flex items-center gap-2 text-sm">
+            <input 
+              type="checkbox" 
+              checked={brandSafeMode} 
+              onChange={(e) => setBrandSafeMode(e.target.checked)} 
+              className="w-4 h-4 text-purple-600 rounded focus:ring-purple-500"
+            />
+            <span className="text-gray-700">Enable Brand-Safe Visuals</span>
+          </label>
         </div>
       </div>
 
@@ -674,7 +704,6 @@ const renderQuickReplies = () => {
         </div>
       </div>
 
-      {/* Quick Replies */}
       {/* Quick Replies */}
       {!isGenerating && (
         <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 p-4 shadow-lg">
