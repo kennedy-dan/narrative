@@ -56,6 +56,21 @@ const enhancementOptions = [
   },
 ];
 
+const videoEnhancementOptions = [
+  {
+    value: "cinematic",
+    icon: "🎬",
+    title: "Cinematic",
+    description: "Professional shot-by-shot script with camera angles and emotional tone",
+  },
+  {
+    value: "digital",
+    icon: "📱",
+    title: "Digital Short",
+    description: "Voiceover-first social media script focused on youth culture and simplicity",
+  },
+];
+
 function prepareBrandSafePrompt(prompt, brandSafeMode = true) {
   if (!brandSafeMode) return prompt;
   
@@ -85,7 +100,7 @@ const ChatMessage = ({ sender, message, timestamp, isTyping, children }) => {
     >
       {isBot && (
         <div className="flex-shrink-0 w-8 h-8 bg-gradient-to-br from-purple-500 to-pink-500 rounded-full flex items-center justify-center">
-          <img src="/images/logo.png" />
+          <Bot size={16} className="text-white" />
         </div>
       )}
 
@@ -171,6 +186,7 @@ export default function ChatStoryFlow() {
   const [visualCue, setVisualCue] = useState("");
   const [wantsVisual, setWantsVisual] = useState(null);
   const [selectedEnhancements, setSelectedEnhancements] = useState([]);
+  const [selectedVideoStyle, setSelectedVideoStyle] = useState("");
   const [visualOutput, setVisualOutput] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
   const [tone, setTone] = useState("");
@@ -302,7 +318,7 @@ export default function ChatStoryFlow() {
     await simulateTyping(1000);
     addMessage(
       "bot",
-      `Great! Let's enhance your ${choice} with some special effects. Select any enhancements you'd like:`
+      `Great! Let's enhance your ${choice} with some special effects. Select any ${choice === "video" ? "style" : "enhancements"} you'd like:`
     );
     setCurrentStep("enhancements");
   };
@@ -315,9 +331,19 @@ export default function ChatStoryFlow() {
     );
   };
 
+  const handleVideoStyleSelect = (style) => {
+    setSelectedVideoStyle(style);
+  };
+
   const generateVisual = async () => {
-    const enhancementText =
-      selectedEnhancements.length > 0
+    if (wantsVisual === "video" && !selectedVideoStyle) {
+      addMessage("bot", "Please select a video style first!");
+      return;
+    }
+
+    const enhancementText = wantsVisual === "video" 
+      ? `Selected style: ${selectedVideoStyle}`
+      : selectedEnhancements.length > 0
         ? `Selected enhancements: ${selectedEnhancements.join(", ")}`
         : "No enhancements selected";
 
@@ -328,82 +354,110 @@ export default function ChatStoryFlow() {
 
     setIsGenerating(true);
     try {
-      // Apply brand-safe filtering to the visual cue before sending
-      const safePrompt = prepareBrandSafePrompt(visualCue, brandSafeMode);
-      
-      const response = await fetch("/api/visual", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          visualCue: safePrompt,
-          enhancements: selectedEnhancements,
-          type: wantsVisual,
-        }),
-      });
+      if (wantsVisual === "video") {
+        // Call the video script API
+        const response = await fetch("/api/video-script", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            visualCue,
+            videoStyle: selectedVideoStyle,
+          }),
+        });
 
-      const res = await response.json();
-      setVisualOutput(res.output);
+        const res = await response.json();
+        setVisualOutput(res.story);
 
-      await simulateTyping(2000);
-      addMessage(
-        "bot",
-        `Here's your ${wantsVisual === "image" ? "image" : "video script"}:`
-      );
+        await simulateTyping(2000);
+        addMessage("bot", "Here's your video script:");
 
-      if (wantsVisual === "image" && res.imageUrl) {
-        let copyTimeout;
-        setTimeout(() => {
-          addMessage(
-            "bot",
-            "",
-            <div className="mt-3">
-              <img
-                src={res.imageUrl}
-                alt="Generated visual"
-                className="rounded-lg shadow-lg max-w-full"
-              />
-              <p className="text-xs text-gray-500 mt-2">Prompt: {res.output}</p>
-              <div className="flex gap-3 mt-2">
-                <button
-                  onClick={() => {
-                    const link = document.createElement("a");
-                    link.href = res.imageUrl;
-                    link.download = "generated_image.png";
-                    link.click();
-                  }}
-                  className="flex items-center gap-1 text-sm text-gray-700 hover:underline"
-                >
-                  <Download size={18} />
-                </button>
-
-                <button
-                  onClick={() => {
-                    navigator.clipboard.writeText(res.output);
-                      setCopied(true);
-              clearTimeout(copyTimeout);
-              copyTimeout = setTimeout(() => setCopied(false), 2000)
-                  }}
-                  className="flex items-center gap-1 text-sm text-gray-700 hover:underline"
-                >
-                   <Copy size={18} />
-                </button>
-                  {copied && (
-            <span className="text-xs text-green-500">Copied</span>
-          )}
-              </div>
-            </div>
-          );
-        }, 500);
-      } else {
         setTimeout(() => {
           addMessage(
             "bot",
             "",
             <div className="mt-3 bg-gray-900 text-green-400 rounded-lg p-4 font-mono text-xs overflow-x-auto">
-              <pre className="whitespace-pre-wrap">{res.output}</pre>
+              <pre className="whitespace-pre-wrap">{res.story}</pre>
+              <div className="flex gap-3 mt-2">
+                <button
+                  onClick={() => {
+                    navigator.clipboard.writeText(res.story);
+                    setCopied(true);
+                    setTimeout(() => setCopied(false), 2000);
+                  }}
+                  className="flex items-center gap-1 text-sm text-green-400 hover:underline"
+                >
+                  <Copy size={14} />
+                  {copied ? "Copied!" : "Copy Script"}
+                </button>
+              </div>
             </div>
           );
         }, 500);
+      } else {
+        // Apply brand-safe filtering to the visual cue before sending
+        const safePrompt = prepareBrandSafePrompt(visualCue, brandSafeMode);
+        
+        const response = await fetch("/api/visual", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            visualCue: safePrompt,
+            enhancements: selectedEnhancements,
+            type: wantsVisual,
+          }),
+        });
+
+        const res = await response.json();
+        setVisualOutput(res.output);
+
+        await simulateTyping(2000);
+        addMessage("bot", "Here's your image:");
+
+        if (res.imageUrl) {
+          let copyTimeout;
+          setTimeout(() => {
+            addMessage(
+              "bot",
+              "",
+              <div className="mt-3">
+                <img
+                  src={res.imageUrl}
+                  alt="Generated visual"
+                  className="rounded-lg shadow-lg max-w-full"
+                />
+                <p className="text-xs text-gray-500 mt-2">Prompt: {res.output}</p>
+                <div className="flex gap-3 mt-2">
+                  <button
+                    onClick={() => {
+                      const link = document.createElement("a");
+                      link.href = res.imageUrl;
+                      link.download = "generated_image.png";
+                      link.click();
+                    }}
+                    className="flex items-center gap-1 text-sm text-gray-700 hover:underline"
+                  >
+                    <Download size={18} />
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(res.output);
+                      setCopied(true);
+                      clearTimeout(copyTimeout);
+                      copyTimeout = setTimeout(() => setCopied(false), 2000)
+                    }}
+                    className="flex items-center gap-1 text-sm text-gray-700 hover:underline"
+                  >
+                     <Copy size={18} />
+                  </button>
+                    {copied && (
+              <span className="text-xs text-green-500">Copied</span>
+            )}
+                </div>
+              </div>
+            );
+          }, 500);
+        }
       }
 
       setTimeout(() => {
@@ -442,6 +496,7 @@ export default function ChatStoryFlow() {
     setVisualCue("");
     setWantsVisual(null);
     setSelectedEnhancements([]);
+    setSelectedVideoStyle("");
     setVisualOutput("");
   };
 
@@ -590,41 +645,78 @@ const renderQuickReplies = () => {
       return (
         <div className="mt-4 space-y-3">
           <div className="grid gap-2">
-            {enhancementOptions.map((enhancement) => (
-              <button
-                key={enhancement.value}
-                onClick={() => handleEnhancementToggle(enhancement.value)}
-                className={`p-3 rounded-lg border text-left transition-all duration-200 ${
-                  selectedEnhancements.includes(enhancement.value)
-                    ? "border-purple-500 bg-purple-50 shadow-sm"
-                    : "border-gray-200 hover:border-purple-300"
-                }`}
-              >
-                <div className="flex items-start gap-3">
-                  <input
-                    type="checkbox"
-                    checked={selectedEnhancements.includes(enhancement.value)}
-                    readOnly
-                    className="mt-0.5 w-4 h-4 text-purple-600 rounded focus:ring-purple-500"
-                  />
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span>{enhancement.icon}</span>
-                      <span className="font-medium text-sm">
-                        {enhancement.value}
-                      </span>
+            {wantsVisual === "video" ? (
+              // Video enhancement options
+              videoEnhancementOptions.map((option) => (
+                <button
+                  key={option.value}
+                  onClick={() => handleVideoStyleSelect(option.value)}
+                  className={`p-3 rounded-lg border text-left transition-all duration-200 ${
+                    selectedVideoStyle === option.value
+                      ? "border-purple-500 bg-purple-50 shadow-sm"
+                      : "border-gray-200 hover:border-purple-300"
+                  }`}
+                >
+                  <div className="flex items-start gap-3">
+                    <input
+                      type="radio"
+                      name="videoStyle"
+                      checked={selectedVideoStyle === option.value}
+                      readOnly
+                      className="mt-0.5 w-4 h-4 text-purple-600 focus:ring-purple-500"
+                    />
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span>{option.icon}</span>
+                        <span className="font-medium text-sm">
+                          {option.title}
+                        </span>
+                      </div>
+                      <p className="text-xs text-gray-600">
+                        {option.description}
+                      </p>
                     </div>
-                    <p className="text-xs text-gray-600">
-                      {enhancement.description}
-                    </p>
                   </div>
-                </div>
-              </button>
-            ))}
+                </button>
+              ))
+            ) : (
+              // Image enhancement options
+              enhancementOptions.map((enhancement) => (
+                <button
+                  key={enhancement.value}
+                  onClick={() => handleEnhancementToggle(enhancement.value)}
+                  className={`p-3 rounded-lg border text-left transition-all duration-200 ${
+                    selectedEnhancements.includes(enhancement.value)
+                      ? "border-purple-500 bg-purple-50 shadow-sm"
+                      : "border-gray-200 hover:border-purple-300"
+                  }`}
+                >
+                  <div className="flex items-start gap-3">
+                    <input
+                      type="checkbox"
+                      checked={selectedEnhancements.includes(enhancement.value)}
+                      readOnly
+                      className="mt-0.5 w-4 h-4 text-purple-600 rounded focus:ring-purple-500"
+                    />
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span>{enhancement.icon}</span>
+                        <span className="font-medium text-sm">
+                          {enhancement.value}
+                        </span>
+                      </div>
+                      <p className="text-xs text-gray-600">
+                        {enhancement.description}
+                      </p>
+                    </div>
+                  </div>
+                </button>
+              ))
+            )}
           </div>
           <QuickReplyButton onClick={generateVisual} variant="primary">
             <Sparkles size={14} className="inline mr-1" /> Generate{" "}
-            {wantsVisual === "image" ? "Image" : "Video"}
+            {wantsVisual === "image" ? "Image" : "Video Script"}
           </QuickReplyButton>
         </div>
       );
@@ -649,7 +741,7 @@ const renderQuickReplies = () => {
       <div className="bg-white border-b border-gray-200 px-4 py-3 shadow-sm">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <img src="/images/logo.png" />
+            <Bot size={32} className="text-purple-600" />
             <div>
               <h1 className="text-lg font-bold text-gray-800">Narratives.XO</h1>
               <p className="text-xs text-gray-500">AI Story Generator</p>
